@@ -60,10 +60,9 @@ sax.dist.min <- function (v1, v2, vocab_size, n, w) {
 # Recurrence Plot
 recurrence_plot <- function(vector) {
   rp <- matrix(nrow = length(vector), ncol=length(vector))
-  sdvec <- sd(vector)
   for (i in 1:length(vector)) {
     for (j in 1:length(vector)) {
-      if (abs(vector[i] - vector[j]) <= sdvec) {
+      if (abs(vector[i] - vector[j]) <= episilon) {
         rp[i,j] <- 1
       } else {
         rp[i,j] <- 0
@@ -73,6 +72,46 @@ recurrence_plot <- function(vector) {
   rp
 }
 
+count <- 0
+#extrair o vetor de carecteristicas (255 dimensoes) usando LBP
+extrairLBP <- function(img){
+  count <- count + 1
+  print(paste("Extraindo LBP:", count))
+  desc <- lbp(img, 1)
+  h <- hist(desc$lbp.ori, plot=FALSE, breaks = 256)
+  return(h$counts)
+}
+
+#L1 ou Manhattan
+DistL1 <- function(x, y){
+  d = 0
+  for (i in c(1:length(x))) {
+    d = d+abs(x[i]-y[i])
+  }
+  return(d)
+}
+
+# Buscar K imagens mais próximas
+#parametros:
+#  M: matriz que comtem os vetore de carateristicas
+#  query: o nome do arquivo de consulta
+#  K: o numero de imagens mais proximas a serem devolvidas
+#retorno:
+#  a lista dos nomes das K-imagens mais proximas
+
+buscarMaisProximos <- function(M, query, K){
+  
+  distancias <- sapply(M, DistL1, query)
+  
+  distancias <- order(distancias, decreasing = FALSE)
+  
+  return(distancias[1:K])
+}
+
+# Retorna a lista de imagens, baseado nos índices
+lista_imagens <- function (vector) {
+  return (db_original[vector, 1])
+}
 
 # normalizar dados
 normalize <- function (values) {
@@ -192,6 +231,8 @@ qy_original <- read.csv("SwedishLeaf_TEST.csv", header = F)
 
 summary(db_original[,2:129])
 
+episilon <- sd(apply(db_original, 1, sd))
+
 #plot.classes(db_original)
 
 # check mean = 0 , sd = 1 (dados normalizados?)
@@ -219,10 +260,31 @@ plot.prec_recall(prec_recall)
 # Calcular recurrence Plot para cada item 
 rp <- list()
 for (i in c(1:length(db_original[,1]))) {
+  print(paste("Calculando Recurrence plot da Imagem: ",i))
   rp[[i]] <- recurrence_plot(db_original[i, -1])
 }
 
+# Extrair LBP das imagens originais
+lbp_originais <- sapply(rp, extrairLBP)
+
+# Calcular Recurrence Plot e LBP das imagens de query, depois calcular as mais próximas
+queries_rp <- list()
+for (i in c(1:length(qy_original[,1]))) {
+  print(paste("Calculando Recurrence plot da Imagem: ",i))
+  queries_rp[[i]] <- recurrence_plot(qy_original[i, -1])
+}
+
+lbp_queries <- sapply(queries_rp, extrairLBP)
+
+# Calcula os 100 numeros mais próximos para as 625 queries
+MAIS_PROXIMOS <- 100
+
+proximos <- matrix(nrow = length(lbp_queries), ncol = MAIS_PROXIMOS)
+for (i in c(1:length(lbp_queries))) {
+  proximos[i,] <- buscarMaisProximos(lbp_originais, lbp_queries[[i]], MAIS_PROXIMOS)
+  proximos[i,] <- lista_imagens(proximos[i,])
+}
 
 
-
+# Calcular Precision e Recall para {5, 10, 15, 20, ..., 95, 100} imagens de retorno 
 
