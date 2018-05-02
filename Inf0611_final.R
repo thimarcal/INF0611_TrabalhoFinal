@@ -8,6 +8,7 @@ library(ggplot2)
 require(reshape2)
 library(wvtool)
 library(OpenImageR)
+library(dtw)
 
 setwd("C:\\Users\\rafaelr\\Documents\\INF611F\\trabalho_final")
 
@@ -180,7 +181,7 @@ plot.classes <- function (db) {
     ggplot(df, aes(time,value)) + geom_line() + facet_grid(series ~ .) + ggtitle(paste("Classe", i))
     ggsave(paste("classe_",i, ".png",sep = ""))
     
-    ggplot(data=db_original,aes(x=V1)) + geom_histogram(bins = 15, fill=I("blue"), col=I("black"),alpha = .4) + xlab("Classes")
+    ggplot(data=db_original,aes(x=as.factor(V1))) + geom_bar() + xlab("Classes")
     ggsave("classes_histogram.png")
   }
 }
@@ -194,6 +195,58 @@ plot.prec_recall <- function(prec_recall, title = "") {
   }
   data <- data.frame(precision=p, recall=r)
   ggplot(data = data) + geom_point(aes(x=recall, y=precision)) + geom_line(aes(x=recall, y=precision)) + ggtitle(title)
+  ggsave(paste(title, ".png", sep=""))  
+}
+
+plot.prec_recall_all <- function(title = "All") {
+  
+  count <- 1
+  colors <- c("Normal-L1", "Normal-L2", "DTW-L1", "DTW-L2", "LBP-L1", "LBP-L2", "HOG-L1", "HOG-L2")
+  
+  lall <- list()
+  for (prec_recall in list(normal_l1$prec_recall, normal_l2$prec_recall, dtw_l1$prec_recall, dtw_l2$prec_recall, lbp_l1$prec_recall, lbp_l2$prec_recall, hog_l1$prec_recall, hog_l2$prec_recall)) {  
+    p <- c()
+    r <- c()
+    
+    for (l in prec_recall) {
+      p <- c(p,l$precision_mean)
+      r <- c(r, l$recall_mean)
+    }
+
+    data <- data.frame(precision=p, recall=r)
+    lall[[count]] <- data
+    count <- count + 1
+  }
+
+  g <- ggplot() + 
+    geom_point(data = lall[[1]], aes(x=recall, y=precision, color = colors[1])) + 
+    geom_line(data =lall[[1]], aes(x=recall, y=precision, color = colors[1])) +
+    
+    geom_point(data = lall[[2]], aes(x=recall, y=precision, color = colors[2])) + 
+    geom_line(data =lall[[2]], aes(x=recall, y=precision, color = colors[2])) +
+    
+    geom_point(data = lall[[3]], aes(x=recall, y=precision, color = colors[3])) + 
+    geom_line(data =lall[[3]], aes(x=recall, y=precision, color = colors[3])) +
+    
+    geom_point(data = lall[[4]], aes(x=recall, y=precision, color = colors[4])) + 
+    geom_line(data =lall[[4]], aes(x=recall, y=precision, color = colors[4])) +
+    
+    geom_point(data = lall[[5]], aes(x=recall, y=precision, color = colors[5])) + 
+    geom_line(data =lall[[5]], aes(x=recall, y=precision, color = colors[5])) +
+    
+    geom_point(data = lall[[6]], aes(x=recall, y=precision, color = colors[6])) + 
+    geom_line(data =lall[[6]], aes(x=recall, y=precision, color = colors[6])) +
+    
+    geom_point(data = lall[[7]], aes(x=recall, y=precision, color = colors[7])) + 
+    geom_line(data =lall[[7]], aes(x=recall, y=precision, color = colors[7])) +
+    
+    geom_point(data = lall[[8]], aes(x=recall, y=precision, color = colors[8])) + 
+    geom_line(data =lall[[8]], aes(x=recall, y=precision, color = colors[8])) +
+    
+    labs(colour="Métodos")
+
+  
+  print(g)
   ggsave(paste(title, ".png", sep=""))  
 }
 
@@ -218,6 +271,7 @@ main.processar <- function(db_desc, qy_desc, tipo, dist.function, title="") {
 main <- function () {
   
   summary(db_original[,-1])
+  summary(as.factor(db_original[,1]))
   
   episilon <- sd(apply(db_original, 1, sd))
   
@@ -230,32 +284,32 @@ main <- function () {
   qy_desc <- descriptor.get(qy_original)
   
   normal_l1 <- main.processar(db_desc, qy_desc, "None", dist.L1, "None - L1")
-  #normal_l2 <- main.processar(db_desc, qy_desc, "None", dist.L2, "None - L2")
+  normal_l2 <- main.processar(db_desc, qy_desc, "None", dist.L2, "None - L2")
   #normal_cos <- main.processar(db_desc, qy_desc, "None", dist.cos, "None - Cosseno")
   
   dtw_l1 <- main.processar(db_desc, qy_desc, "None", dist.dtw_L1, "DTW - L1")
-  #dtw_l2 <- main.processar(db_desc, qy_desc, "None", dist.dtw_L2, "DTW - L2")
+  dtw_l2 <- main.processar(db_desc, qy_desc, "None", dist.dtw_L2, "DTW - L2")
   #dtw_cos <- main.processar(db_desc, qy_desc, "None", dist.dtw_L2, "DTW - Cosseno")
   
-  db_desc <- descriptor.get(db_original, "LBP", rp)
-  qy_desc <- descriptor.get(qy_original, "LBP", queries_rp)
+  db_desc_lbp <- descriptor.get(db_original, "LBP", rp)
+  qy_desc_lbp <- descriptor.get(qy_original, "LBP", queries_rp)
   
-  lbp_l1 <- main.processar(db_desc, qy_desc, "LBP", dist.L1, "LBP - L1")
-  #lbp_l2 <- main.processar(db_desc, qy_desc, "LBP", dist.L2, "LBP - L2")
-  #lbp_cos <- main.processar(db_desc, qy_desc, "LBP", dist.cos, "LBP - Cosseno")
+  lbp_l1 <- main.processar(db_desc_lbp, qy_desc_lbp, "LBP", dist.L1, "LBP - L1")
+  lbp_l2 <- main.processar(db_desc_lbp, qy_desc_lbp, "LBP", dist.L2, "LBP - L2")
+  #lbp_cos <- main.processar(db_desc_lbp, qy_desc_lbp, "LBP", dist.cos, "LBP - Cosseno")
   
-  db_desc <- descriptor.get(db_original, "HOG", rp)
-  qy_desc <- descriptor.get(qy_original, "HOG", queries_rp)
+  db_desc_hog <- descriptor.get(db_original, "HOG", rp)
+  qy_desc_hog <- descriptor.get(qy_original, "HOG", queries_rp)
   
-  #hog_l1 <- main.processar(db_desc, qy_desc, "HOG", dist.L1, "HOG - L1")
-  #hog_l2 <- main.processar(db_desc, qy_desc, "HOG", dist.L2, "HOG - L2")
-  #hog_cos <- main.processar(db_desc, qy_desc, "HOG", dist.cos, "HOG - Cosseno")
+  hog_l1 <- main.processar(db_desc_hog, qy_desc_hog, "HOG", dist.L1, "HOG - L1")
+  hog_l2 <- main.processar(db_desc_hog, qy_desc_hog, "HOG", dist.L2, "HOG - L2")
+  #hog_cos <- main.processar(db_desc_hog, qy_desc_hog, "HOG", dist.cos, "HOG - Cosseno")
   
   # check classes com melhor e pior classificação
   
   
   # plotar precision x recall todas as buscas
-  # ggplot()
+  plot.prec_recall_all()
 }
 
 # Main
