@@ -72,13 +72,10 @@ recurrence_plot <- function(vector) {
   rp
 }
 
-count <- 0
 #extrair o vetor de carecteristicas (255 dimensoes) usando LBP
 extrairLBP <- function(img){
-  count <- count + 1
-  print(paste("Extraindo LBP:", count))
   desc <- lbp(img, 1)
-  h <- hist(desc$lbp.ori, plot=FALSE, breaks = 256)
+  h <- hist(desc$lbp.ori, plot=FALSE, breaks = 0:255)
   return(h$counts)
 }
 
@@ -99,9 +96,16 @@ DistL1 <- function(x, y){
 #retorno:
 #  a lista dos nomes das K-imagens mais proximas
 
-buscarMaisProximos <- function(M, query, K){
+buscarMaisProximosL1 <- function(M, query, K){
+  distancias <- apply(M, 2, DistL1, query)
   
-  distancias <- sapply(M, DistL1, query)
+  distancias <- order(distancias, decreasing = FALSE)
+  
+  return(distancias[1:K])
+}
+
+buscarMaisProximosL2 <- function(M, query, K){
+  distancias <- apply(M, 2, dist.L2, query)
   
   distancias <- order(distancias, decreasing = FALSE)
   
@@ -279,10 +283,16 @@ lbp_queries <- sapply(queries_rp, extrairLBP)
 # Calcula os 100 numeros mais próximos para as 625 queries
 MAIS_PROXIMOS <- 100
 
-proximos <- matrix(nrow = length(lbp_queries), ncol = MAIS_PROXIMOS)
-for (i in c(1:length(lbp_queries))) {
-  proximos[i,] <- buscarMaisProximos(lbp_originais, lbp_queries[[i]], MAIS_PROXIMOS)
-  proximos[i,] <- lista_imagens(proximos[i,])
+proximosL1 <- matrix(nrow = length(lbp_queries[1,]), ncol = MAIS_PROXIMOS)
+for (i in c(1:length(lbp_queries[1,]))) {
+  proximosL1[i,] <- buscarMaisProximosL1(lbp_originais, lbp_queries[,i], MAIS_PROXIMOS)
+  proximosL1[i,] <- lista_imagens(proximos[i,])
+}
+
+proximosL2 <- matrix(nrow = length(lbp_queries[1,]), ncol = MAIS_PROXIMOS)
+for (i in c(1:length(lbp_queries[1,]))) {
+  proximosL2[i,] <- buscarMaisProximosL2(lbp_originais, lbp_queries[,i], MAIS_PROXIMOS)
+  proximosL2[i,] <- lista_imagens(proximos[i,])
 }
 
 
