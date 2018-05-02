@@ -1,7 +1,7 @@
 #################################################
 ## INF-0611 - Trabalho Final
 ##        Rafael Fernando Ribeiro
-##        Thiago Gomes Mar?al Pereira
+##        Thiago Gomes Marçal Pereira
 #################################################
 
 library(ggplot2)
@@ -9,11 +9,10 @@ require(reshape2)
 library(wvtool)
 library(OpenImageR)
 
-#setwd("C:\\Users\\rafae\\Documents\\INF0611_Final")
-setwd("/Users/thiagom/Documents/Studies/Unicamp/MDC/INF-611/Tarefas/INF0611_TrabalhoFinal")
+setwd("C:\\Users\\rafaelr\\Documents\\INF611F\\trabalho_final")
 
 #-----------------------------------------------------------
-# Fun??es
+# Funções
 # ----------------------------------------------------------
 
 # Recurrence Plot
@@ -31,39 +30,33 @@ recurrence_plot <- function(vector) {
   rp
 }
 
+count <- 0
 #extrair o vetor de carecteristicas (255 dimensoes) usando LBP
 extrairLBP <- function(img){
+  count <- count + 1
+  #print(paste("Extraindo LBP:", count))
   desc <- lbp(img, 1)
   h <- hist(desc$lbp.ori, plot=FALSE, breaks = 0:255)
+  #h <- hist(desc$lbp.u2, plot=FALSE, breaks = 0:58)
   return(h$counts)
 }
 
-#L1 ou Manhattan
-dist.L1 <- function(x, y){
-  d = 0
-  for (i in c(1:length(x))) {
-    d = d+abs(x[i]-y[i])
-  }
-  return(d)
-}
-
-# Buscar K imagens mais pr?ximas
+# Buscar K imagens mais próximas
 #parametros:
 #  M: matriz que comtem os vetore de carateristicas
 #  query: o nome do arquivo de consulta
 #  K: o numero de imagens mais proximas a serem devolvidas
 #retorno:
 #  a lista dos nomes das K-imagens mais proximas
-
 buscarMaisProximos <- function(M, query, dist.func, K){
-  distancias <- apply(M, 2, dist.func, query)
+  distancias <- apply(M, 1, dist.func, query)
   
   distancias <- order(distancias, decreasing = FALSE)
   
   return(distancias[1:K])
 }
 
-# Retorna a lista de imagens, baseado nos ?ndices
+# Retorna a lista de imagens, baseado nos índices
 lista_imagens <- function (vector) {
   return (db_original[vector, 1])
 }
@@ -74,39 +67,56 @@ normalize <- function (values) {
   (values - mean(values))/sd(values)
 }
 
+#L1 ou Manhattan
+dist.L1 <- function(x, y){
+  d = 0
+  for (i in c(1:length(x))) {
+    d = d+abs(x[i]-y[i])
+  }
+  return(as.numeric(d))
+}
+
 # Calculo de Distancia L2
 dist.L2 <- function(x, y){
   d = 0
   for (i in c(1:length(x))) {
     d = d+(x[i]-y[i])^2
   }
-  return(sqrt(d))
+  return(as.numeric(sqrt(d)))
 }
 
 # Calculo de Distancia Cossenos
 dist.cos <- function(x, y){
-  return( sum(x*y)/sqrt(sum(x^2)*sum(y^2)) )
+  return (as.numeric(sum(x*y)/sqrt(sum(x^2)*sum(y^2))))
+}
+
+dist.dtw_L1 <- function(x, y) {
+  return (dtw(x,y, distance.only = T, dist.method = "manhattan")$distance)     
+}
+
+dist.dtw_L2 <- function(x, y) {
+  return (dtw(x,y, distance.only = T, dist.method = "L2")$distance)     
+}
+
+dist.dtw_cos <- function(x, y) {
+  return (dtw(x,y, distance.only = T, dist.method = "cosine")$distance)     
 }
 
 # Calculo das distancias
 dist.calc <- function(db, query, dist.func) {
-  print("Calculando distancias")
-  qrow <- nrow(query)
-  qcol <- ncol(query)
-  drow <- nrow(db)
-  dcol <- ncol(db)
   
-  #l <- list()
-  proximos <- matrix(nrow = length(lbp_queries[1,]), ncol = MAIS_PROXIMOS)
-  for (i in c(1:length(lbp_queries[1,]))) {
-    proximos[i,] <- buscarMaisProximos(lbp_originais, lbp_queries[,i], dist.func, MAIS_PROXIMOS)
+  MAIS_PROXIMOS <- 100
+
+  proximos <- matrix(nrow = nrow(query), ncol = MAIS_PROXIMOS)
+  for (i in c(1:nrow(query))) {
+    proximos[i,] <- buscarMaisProximos(db, query[i,], dist.func, MAIS_PROXIMOS)
     proximos[i,] <- lista_imagens(proximos[i,])
   }
   
   return(proximos)
 }
 
-calc.precision <- function(q, distances, k) {
+calc.precision <- function(q, db, distances, k) {
   tp <- sum(distances[1:k] == q)
   fp <- k
   return (tp/fp)
@@ -120,7 +130,7 @@ calc.recall <- function(q, db, distances, k) {
 
 # calcular precision e recall
 calc.prec_recall <- function(db, qy, distances, k) {
-  print("Calculando precision recall")
+  
   l <- list()
   qrow <- nrow(qy)
   ks <- c(seq(5, 100, by = 5))
@@ -129,7 +139,7 @@ calc.prec_recall <- function(db, qy, distances, k) {
     precision <- c()
     recall <- c()
     for (q in c(1:qrow)) {
-      precision <- c(precision, calc.precision(distances[q,1], distances[q,-1], ks[k]))
+      precision <- c(precision, calc.precision(distances[q,1], db, distances[q,-1], ks[k]))
       recall <- c(recall, calc.recall(distances[q,1], db, distances[q,-1], ks[k]))
     }
     l[[k]] <- list(k=ks[k],  
@@ -139,21 +149,22 @@ calc.prec_recall <- function(db, qy, distances, k) {
   return (l)
 }
 
-descriptor.get <- function(db, descriptor, rp_images = NULL) {
+descriptor.get <- function(db, descriptor = "None", rp_images = NULL) {
   
   if (descriptor == "HOG") {
     hog_db <- sapply(rp_images, HOG,cells = 8, orientations = 6)
     hog_db <- t(hog_db)
-    db_new <- cbind(as.data.frame(db[,1]),as.data.frame(hog_db))
+    #db_new <- cbind(as.data.frame(db[,1]),as.data.frame(hog_db))
+    db_new <- hog_db
   }
   else if (descriptor == "LBP") {
-    print("Extraindo LBP")
     lbp_db <- sapply(rp_images, extrairLBP)
     lbp_db <- t(lbp_db)
-    db_new <- cbind(as.data.frame(db[,1]),as.data.frame(lbp_db))
+    #db_new <- cbind(as.data.frame(db[,1]),as.data.frame(lbp_db))
+    db_new <- lbp_db
   }
   else{
-    db_new <- db
+    db_new <- as.matrix(db[,-1])
   }
   return(db_new)
 }
@@ -168,10 +179,13 @@ plot.classes <- function (db) {
     #ggplot(df, aes(time,value)) + geom_line(aes(colour = series))
     ggplot(df, aes(time,value)) + geom_line() + facet_grid(series ~ .) + ggtitle(paste("Classe", i))
     ggsave(paste("classe_",i, ".png",sep = ""))
+    
+    ggplot(data=db_original,aes(x=V1)) + geom_histogram(bins = 15, fill=I("blue"), col=I("black"),alpha = .4) + xlab("Classes")
+    ggsave("classes_histogram.png")
   }
 }
 
-plot.prec_recall <- function(prec_recall, title) {
+plot.prec_recall <- function(prec_recall, title = "") {
   p <- c()
   r <- c()
   for (l in prec_recall) {
@@ -189,20 +203,14 @@ check.normalizado <- function (db) {
   apply(db[,2:129], 1, sd)
 }
 # ----------------------------------------------------------
-main.processar <- function(db_original, qy_original, tipo, dist.function, db_rp = NULL, qy_rp = NULL) {
-  
- # db_desc <- descriptor.get(db_original, tipo, db_rp)
- # qy_desc <- descriptor.get(qy_original, tipo, qy_rp)
-  
-  #for tests
-  #qy_desc <- qy_desc[1:10,]
+main.processar <- function(db_desc, qy_desc, tipo, dist.function, title="") {
   
   distances <- dist.calc(db_desc, qy_desc, dist.function)
   distances <- cbind(qy_original[,1], distances)
   
-  prec_recall <- calc.prec_recall(db_desc, qy_desc, distances)
+  prec_recall <- calc.prec_recall(db_original, qy_original, distances)
   
-  #plot.prec_recall(prec_recall)
+  plot.prec_recall(prec_recall, title)
   
   return (list("type" = tipo, "function"=dist.function, "distance" = distances, "prec_recall" = prec_recall))
 }
@@ -215,24 +223,36 @@ main <- function () {
   
   plot.classes(db_original)
   
-  #ggplot(data=db_original,aes(x=V1)) + geom_histogram(bins = 15, fill=I("blue"), col=I("black"),alpha = .4)
-  #ggsave("classes_histogram.png")
-  
   check.normalizado(db_original)
   check.normalizado(qy_original)
-
-  #normal_l2 <- main.processar(db_original, qy_original, "None", dist.L2)
-  #normal_cos <- main.processar(db_original, qy_original, "None", dist.cos)
   
-  #dtw_l2 <- main.processar(db_original, qy_original, "None", dist.dtw_L2)
-  #dtw_cos <- main.processar(db_original, qy_original, "None", dist.dtw_L2)
+  db_desc <- descriptor.get(db_original)
+  qy_desc <- descriptor.get(qy_original)
   
-  lbp_l1 <- main.processar(db_original, qy_original, "LBP", dist.L1, rp, queries_rp)
-  #lbp_l2 <- main.processar(db_original, qy_original, "LBP", dist.L2, rp, queries_rp)
-  #lbp_cos <- main.processar(db_original, qy_original, "LBP", dist.cos, rp, queries_rp)
+  normal_l1 <- main.processar(db_desc, qy_desc, "None", dist.L1, "None - L1")
+  #normal_l2 <- main.processar(db_desc, qy_desc, "None", dist.L2, "None - L2")
+  #normal_cos <- main.processar(db_desc, qy_desc, "None", dist.cos, "None - Cosseno")
   
-  #hog_l2 <- main.processar(db_original, qy_original, "HOG", dist.L2, rp, queries_rp)
-  #hog_cos <- main.processar(db_original, qy_original, "HOG", dist.cos, rp, queries_rp)
+  dtw_l1 <- main.processar(db_desc, qy_desc, "None", dist.dtw_L1, "DTW - L1")
+  #dtw_l2 <- main.processar(db_desc, qy_desc, "None", dist.dtw_L2, "DTW - L2")
+  #dtw_cos <- main.processar(db_desc, qy_desc, "None", dist.dtw_L2, "DTW - Cosseno")
+  
+  db_desc <- descriptor.get(db_original, "LBP", rp)
+  qy_desc <- descriptor.get(qy_original, "LBP", queries_rp)
+  
+  lbp_l1 <- main.processar(db_desc, qy_desc, "LBP", dist.L1, "LBP - L1")
+  #lbp_l2 <- main.processar(db_desc, qy_desc, "LBP", dist.L2, "LBP - L2")
+  #lbp_cos <- main.processar(db_desc, qy_desc, "LBP", dist.cos, "LBP - Cosseno")
+  
+  db_desc <- descriptor.get(db_original, "HOG", rp)
+  qy_desc <- descriptor.get(qy_original, "HOG", queries_rp)
+  
+  #hog_l1 <- main.processar(db_desc, qy_desc, "HOG", dist.L1, "HOG - L1")
+  #hog_l2 <- main.processar(db_desc, qy_desc, "HOG", dist.L2, "HOG - L2")
+  #hog_cos <- main.processar(db_desc, qy_desc, "HOG", dist.cos, "HOG - Cosseno")
+  
+  # check classes com melhor e pior classificação
+  
   
   # plotar precision x recall todas as buscas
   # ggplot()
@@ -246,4 +266,4 @@ qy_original <- read.csv("SwedishLeaf_TEST.csv", header = F)
 #rp <- recurrence_plot(db_original)
 #queries_rp <- recurrence_plot(qy_original)
 
-main()
+#main()
